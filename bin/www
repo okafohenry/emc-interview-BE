@@ -1,0 +1,149 @@
+#!/usr/bin/env node
+
+/**
+ * Module dependencies.
+ */
+/**
+ * parse dotenv
+ */
+require('dotenv').config();
+
+var app = require('../server');
+var debug = require('debug')('boilerplate:server');
+var http = require('http');
+/**
+ * Get port from environment and store in Express.
+ */
+var port = normalizePort(process.env.PORT || '3000');
+app.set('port', port);
+
+/**
+ * Create HTTP server.
+ */
+var server = http.createServer(app);
+
+/**
+ * Listen on provided port, on all network interfaces.
+ */
+server.listen(port, () => {
+  console.log(
+    `${process.env.NAME} Server Running On Port ${process.env.PORT} in ${process.env.MODE} Mode`
+  );
+});
+server.on('error', onError);
+server.on('listening', onListening);
+
+/**
+ * Db Connector
+ */
+const mongoose = require('mongoose');
+mongoose.Promise = global.Promise;
+
+const connect = mongoose.connection;
+mongoose.set('strictQuery', true);
+
+const MODE = process.env.MODE === 'production';
+
+const locale = MODE ? process.env.MONGO_URI : process.env.DEBUG_MONGO_URI;
+
+/**
+ * Mongodb Connector
+ * @param {string} [url] Mongodb Url `Optional`
+ */
+const connectDB = async (url) => {
+  const serverUrl = url ? url : locale;
+  connect.on('connected', async () => {
+    console.log('MongoDB Connection Established');
+  });
+
+  connect.on('reconnected', async () => {
+    console.log('MongoDB Connection Reestablished');
+  });
+
+  connect.on('disconnected', () => {
+    console.log('Mongo Connection Disconnected');
+    console.log('Trying to reconnect to Mongo ...');
+
+    setTimeout(() => {
+      mongoose.connect(serverUrl, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+        keepAlive: true,
+        socketTimeoutMS: 3000,
+        connectTimeoutMS: 3000
+      });
+    }, 3000);
+  });
+
+  connect.on('close', () => {
+    console.log('Mongo Connection Closed');
+  });
+  connect.on('error', (error) => {
+    console.log('Mongo Connection ERROR: ' + error);
+  });
+
+  await mongoose
+    .connect(serverUrl, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true
+    })
+    .catch((error) => console.log(error));
+};
+
+connectDB();
+
+/**
+ * Normalize a port into a number, string, or false.
+ */
+
+function normalizePort(val) {
+  var port = parseInt(val, 10);
+
+  if (isNaN(port)) {
+    // named pipe
+    return val;
+  }
+
+  if (port >= 0) {
+    // port number
+    return port;
+  }
+
+  return false;
+}
+
+/**
+ * Event listener for HTTP server "error" event.
+ */
+
+function onError(error) {
+  if (error.syscall !== 'listen') {
+    throw error;
+  }
+
+  var bind = typeof port === 'string' ? 'Pipe ' + port : 'Port ' + port;
+
+  // handle specific listen errors with friendly messages
+  switch (error.code) {
+    case 'EACCES':
+      console.error(bind + ' requires elevated privileges');
+      process.exit(1);
+      break;
+    case 'EADDRINUSE':
+      console.error(bind + ' is already in use');
+      process.exit(1);
+      break;
+    default:
+      throw error;
+  }
+}
+
+/**
+ * Event listener for HTTP server "listening" event.
+ */
+
+function onListening() {
+  var addr = server.address();
+  var bind = typeof addr === 'string' ? 'pipe ' + addr : 'port ' + addr.port;
+  debug('Listening on ' + bind);
+}
